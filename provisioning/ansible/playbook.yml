@@ -1,0 +1,128 @@
+---
+- hosts: all
+  tasks:
+
+  - name: upgrade ubuntu
+    apt: upgrade=dist update_cache=yes force=yes dpkg_options="force-confdef,force-confold"
+    environment:
+      DEBIAN_FRONTEND: noninteractive
+    become: true
+
+  #  # dpkg -L linux-image*
+  # - name: Remove old kernels
+  #   apt: name={{ item }} purge=yes state=absent
+  #   with_items:
+  #     - linux-image-3.13.0-62-generic
+  #     - linux-image-extra-3.13.0-62-generic
+
+  - name: Install workstation apps
+    apt: name={{ item }} state=latest
+    become: true
+    with_items:
+      - indicator-multiload
+      - curl
+      - alien    # To install rpms
+      - libaio1  # sqlplus client requires them
+      - compizconfig-settings-manager # Optimisations to remove fancy UI
+      - unity-tweak-tool
+      - htop
+      - git
+      - yakuake
+      - sqlite3
+      - vim
+      - wget
+      - aria2
+      - aptitude
+      - tree
+      - unzip
+      - ansible
+
+  - name: download java 8
+    shell: aria2c -x 16 -s 16 --continue=true --check-certificate=false --header 'Cookie:oraclelicense=accept-securebackup-cookie' http://download.oracle.com/otn-pub/java/jdk/8u91-b14/jdk-8u91-linux-x64.tar.gz --dir=/install-bucket/linux/java --out=jdk-8u91-linux-x64.tar.gz
+  - name: download java 7
+    shell: aria2c -x 16 -s 16 --continue=true --check-certificate=false --header 'Cookie:oraclelicense=accept-securebackup-cookie' http://download.oracle.com/otn-pub/java/jdk/7u79-b15/jdk-7u79-linux-x64.tar.gz --dir=/install-bucket/linux/java --out=jdk-7u79-linux-x64.tar.gz
+  - name: download intellij
+    shell: aria2c -x 16 -s 16 --continue=true https://download.jetbrains.com/idea/ideaIU-15.0.6.tar.gz --dir=/install-bucket/linux/intellij --out=ideaIU-15.0.6.tar.gz
+  - name: download eclipse
+    shell: aria2c -x 16 -s 16 --continue=true http://dist.springsource.com/release/STS/3.7.3.RELEASE/dist/e4.6/spring-tool-suite-3.7.3.RELEASE-e4.6-linux-gtk-x86_64.tar.gz --dir=/install-bucket/linux/eclipse --out=spring-tool-suite-3.7.3.RELEASE-e4.6-linux-gtk-x86_64.tar.gz
+  - name: download sql developer
+    shell: aria2c -x 16 -s 16 --continue=true http://download.oracle.com/otn/java/sqldeveloper/sqldeveloper-4.1.3.20.78-no-jre.zip --dir=/install-bucket/linux/oracle --out=sqldeveloper-4.1.3.20.78-no-jre.zip
+
+  - name: install jenv
+    shell: curl -s get.jenv.io | bash
+  - name: install sdkman
+    shell: curl -s http://get.sdkman.io | bash
+  - name: install nvm
+    shell: curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.31.1/install.sh | bash
+  - name: create /usr/lib/jvm
+    file: path=/usr/lib/jvm state=directory
+    become: true
+  - name: install jdk 8
+    unarchive: src=~/Downloads/linux/java/jdk-8u91-linux-x64.tar.gz dest=/usr/lib/jvm
+    become: true
+  - name: install jdk 7
+    unarchive: src=~/Downloads/linux/java/jdk-7u79-linux-x64.tar.gz dest=/usr/lib/jvm
+    become: true
+  - name: setup jenv
+    file: path=/home/vagrant/.jenv/candidates/java state=directory
+  - name: link jdk 8 to jenv
+    file: path=/home/vagrant/.jenv/candidates/java/1.8.0_91 src=/usr/lib/jvm/jdk1.8.0_91 state=link
+  - name: link jdk 7 to jenv
+    file: path=/home/vagrant/.jenv/candidates/java/1.7.0_79 src=/usr/lib/jvm/jdk1.7.0_79 state=link
+  - name: install intellij
+    unarchive: src=~/Downloads/linux/intellij/ideaIU-15.0.6.tar.gz dest=~
+  - name: install eclipse
+    unarchive: src=~/Downloads/linux/eclipse/spring-tool-suite-3.7.3.RELEASE-e4.6-linux-gtk-x86_64.tar.gz dest=~
+
+
+
+  - name: setup sql developer
+    file: path=/usr/local/lib/oracle state=directory
+    become: true
+  - name: install sql developer
+    unarchive: src=~/Downloads/linux/oracle/sqldeveloper-4.1.3.20.78-no-jre.zip dest=/usr/local/lib/oracle
+    become: true
+  - file: src=/usr/local/lib/oracle/sqldeveloper/sqldeveloper.sh path=/usr/local/bin/sqldeveloper state=link
+    become: true
+  # - copy: src=usr/share/applications/sqldeveloper.desktop dest=/usr/share/applications/sqldeveloper.desktop
+  #   notify: update-desktop-database
+
+  #   # Freemind
+  # - unarchive: src=/install-bucket/{{ freemind }}.zip dest=/opt/dev/java/freemind creates=/opt/dev/java/freemind/freemind.sh owner=vagrant group=vagrant
+  # - copy: src=/install-bucket/Free_Mind.png dest=/opt/dev/java/freemind/Free_Mind.png
+  # - file: dest=/opt/dev/java/freemind/freemind.sh mode=755
+  # - file: src=/opt/dev/java/freemind/freemind.sh path=/usr/local/bin/freemind state=link
+  # - copy: src=usr/share/applications/freemind.desktop dest=/usr/share/applications/freemind.desktop
+  #   notify: update-desktop-database
+
+  #   # SQL*Plus
+  - command: alien -i /install-bucket/linux/oracle/oracle-instantclient12.1-basiclite-12.1.0.2.0-1.x86_64.rpm
+    become: true
+  #   args:
+  #     creates: /usr/lib/oracle
+  - command: alien -i /install-bucket/linux/oracle/oracle-instantclient12.1-sqlplus-12.1.0.2.0-1.x86_64.rpm
+    become: true
+  #   args:
+  #     creates: /usr/bin/sqlplus64
+  # - file: src=/usr/bin/sqlplus64 path=/usr/bin/sqlplus state=link
+  #   # export LD_LIBRARY_PATH=/usr/lib/oracle/12.1/client64/lib/:$LD_LIBRARY_PATH
+  #   # export ORACLE_SID=XE
+
+  #   # FIXME Remove this fix "--touch-devices=123" when this issue is closed https://code.google.com/p/chromium/issues/detail?id=465660
+  # - copy: src=usr/share/applications/google-chrome.desktop dest=/usr/share/applications/
+
+  #   # Setup the user mount
+  # - mount: name=/home/vagrant/Documents src=//aur.national.com.au/User_Data/AU-VIC-Melbourne-3COL3-01/UserData/P732238 fstype=cifs opts=rw,credentials=/home/vagrant/.smbpasswd,noexec,uid=vagrant,gid=vagrant state=mounted
+
+  #   # Scala
+  # - unarchive: src=/install-bucket/{{ scala }}.tgz dest=/opt/dev/scala creates=/opt/dev/scala/{{ scala }} owner=vagrant group=vagrant
+  # - file: src=/opt/dev/scala/{{ scala }}/bin/scala path=/usr/local/bin/scala state=link
+
+  - file: path={{ item }} owner=vagrant group=vagrant state=directory
+    become: true
+    with_items:
+      - /usr/lib/jvm
+      - /opt/dev/java
+      - /opt/dev/java/ant
+      - /opt/dev/java/freemind
+      - /opt/dev/scala
